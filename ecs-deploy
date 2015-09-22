@@ -5,6 +5,8 @@ function usage() {
     cat <<EOM
     ##### ecs-deploy #####
     Simple script for triggering blue/green deployments on Amazon Elastic Container Service
+    https://github.com/APSL/ecs-deploy
+    Forked from
     https://github.com/silinternational/ecs-deploy
 
     Required arguments:
@@ -119,15 +121,16 @@ im=`echo $IMAGE | cut -d':' -f 1`
 tag=`echo $IMAGE | cut -d':' -f 2`
 
 # Extract out the repository from the image, if applicable
-if ! [[ $im =~ ^[^/]+/[^/]+$|^[^/]+$ ]]; then echo "Your image/repository specification string is invalid" && exit 1; fi
+#if ! [[ $im =~ ^[^/]+/[^/]+$|^[^/]+$ ]]; then echo "Your image/repository specification string is invalid" && exit 1; fi
 repo=`echo $im | cut -d '/' -f 1`
 imend=`echo $im | cut -d '/' -f 2`
+imend2=`echo $im | cut -d '/' -f 3`
 
 # Replace the image tag in the old def
 if [[ $repo == $imend ]]; then
   sed -i def -e "s/\(\"image\": \"$repo\)\(:[^ ]\+\)*\"/\1:$tag\"/"
 else
-  sed -i def -e "s/\(\"image\": \"$repo\/$imend\)\(:[^ ]\+\)*\"/\1:$tag\"/"
+  sed -i def -e "s/\(\"image\": \"$repo\/$imend\/$imend2\)\(:[^ ]\+\)*\"/\1:$tag\"/"
 fi
 
 # Filter the def
@@ -137,8 +140,49 @@ jq < def > newdef '.taskDefinition|{family: .family, volumes: .volumes, containe
 NEW_TASKDEF=`aws ecs register-task-definition --cli-input-json file://newdef | jq .taskDefinition.taskDefinitionArn | tr -d '"'`
 echo "New task definition: $NEW_TASKDEF";
 
-# Update the service
-UPDATE=`aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASKDEF`
+echo "Start update with count tasks = 1..."
+
+# Update the service with the count 1 and wait
+UPDATE=`aws ecs update-service --desired-count 1 --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASKDEF`
+
+# See if the service is able to come up again
+every=10
+i=0
+task1=0
+while [ $i -lt $TIMEOUT ] 
+do
+  # Scan the list of running tasks for that service, and see if one of them is the
+  # new version of the task definition
+  rm -f tasks
+  
+  aws ecs list-tasks --cluster $CLUSTER  --service-name $SERVICE --desired-status RUNNING \
+    | jq '.taskArns[]' \
+    | xargs -I{} aws ecs describe-tasks --cluster $CLUSTER --tasks {} >> tasks
+  
+  jq < tasks > results ".tasks[]| if .taskDefinitionArn == \"$NEW_TASKDEF\" then . else empty end|.lastStatus"
+  
+  RUNNING=`grep -e "RUNNING" results`
+
+  if [ $RUNNING ]; then
+    echo "Service updated successfully, new task definition is updated. Count tasks = 1.";
+    task1=1
+    i=$TIMEOUT
+  fi
+  
+  sleep $every
+  i=$(( $i + $every ))
+done
+
+# Timeout
+if [ $task1 -eq 0 ]; then
+    echo "ERROR: New task definition not running within $TIMEOUT seconds (desired-count = 1)"
+    exit 1
+fi
+
+echo "Start update with count tasks = 2..."
+
+# Update the service with the count 2 and wait
+UPDATE=`aws ecs update-service --desired-count 2 --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASKDEF`
 
 # See if the service is able to come up again
 every=10
@@ -158,7 +202,7 @@ do
   RUNNING=`grep -e "RUNNING" results`
 
   if [ $RUNNING ]; then
-    echo "Service updated successfully, new task definition running.";
+    echo "Service updated successfully, new task definition running is running with count tasks = 2.";
     exit 0
   fi
   
@@ -167,6 +211,5 @@ do
 done
 
 # Timeout
-echo "ERROR: New task definition not running within $TIMEOUT seconds"
+echo "ERROR: New task definition not running within $TIMEOUT seconds (desired-count = 2)"
 exit 1
-
