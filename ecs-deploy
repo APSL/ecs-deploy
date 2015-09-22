@@ -18,7 +18,7 @@ function usage() {
         -i | --image            Name of Docker image to run, ex: mariadb:latest
 
     Optional arguments:
-        -t | --timeout          Default is 90s. Script monitors ECS Service for new task definition to be running.
+        -t | --timeout          Default is 180s. Script monitors ECS Service for new task definition to be running.
 
     Example:
         ecs-deploy -k ABC123 -s SECRETKEY -c production1 -n doorman-service -i docker.repo.com/doorman:latest
@@ -34,7 +34,7 @@ if [ $# == 0 ]; then usage; fi
 CLUSTER=false
 SERVICE=false
 IMAGE=false
-TIMEOUT=90
+TIMEOUT=180
 VERBOSE=false
 
 # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY can be set as environment variables 
@@ -86,15 +86,21 @@ if [ $VERBOSE == true ]; then
     set -x
 fi
 
-# Make sure we have all the variables needed: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, CLUSTER, SERVICE, IMAGE
-if [ $AWS_ACCESS_KEY_ID == false ]; then 
-    echo "AWS_ACCESS_KEY_ID is required. You can set it as an environment variable or pass the value using -k or --aws-access-key"
-    exit 1
+# If not aws config check if the AWS envs are available
+if [ ! -f ~/.aws/config ]; then
+
+    # Make sure we have all the variables needed: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, CLUSTER, SERVICE, IMAGE
+    if [ $AWS_ACCESS_KEY_ID == false ]; then 
+        echo "AWS_ACCESS_KEY_ID is required. You can set it as an environment variable or pass the value using -k or --aws-access-key"
+        exit 1
+    fi
+    if [ $AWS_SECRET_ACCESS_KEY == false ]; then 
+        echo "AWS_SECRET_ACCESS_KEY is required. You can set it as an environment variable or pass the value using -s or --aws-secret-key"
+        exit 1
+    fi
+    
 fi
-if [ $AWS_SECRET_ACCESS_KEY == false ]; then 
-    echo "AWS_SECRET_ACCESS_KEY is required. You can set it as an environment variable or pass the value using -s or --aws-secret-key"
-    exit 1
-fi
+
 if [ $CLUSTER == false ]; then 
     echo "CLUSTER is required. You can pass the value using -c or --cluster"
     exit 1
@@ -163,7 +169,10 @@ do
   
   RUNNING=`grep -e "RUNNING" results`
 
-  if [ $RUNNING ]; then
+  NUM_TASKS=`aws ecs list-tasks --cluster $CLUSTER  --service-name $SERVICE --desired-status RUNNING \
+    | jq '.taskArns[]' | wc -l`
+  
+  if [ $RUNNING ] && [ $NUM_TASKS -eq 1 ]; then
     echo "Service updated successfully, new task definition is updated. Count tasks = 1.";
     task1=1
     i=$TIMEOUT
@@ -182,7 +191,7 @@ fi
 echo "Start update with count tasks = 2..."
 
 # Update the service with the count 2 and wait
-UPDATE=`aws ecs update-service --desired-count 2 --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASKDEF`
+UPDATE=`aws ecs update-service --desired-count 2 --cluster $CLUSTER --service $SERVICE`
 
 # See if the service is able to come up again
 every=10
@@ -199,9 +208,12 @@ do
   
   jq < tasks > results ".tasks[]| if .taskDefinitionArn == \"$NEW_TASKDEF\" then . else empty end|.lastStatus"
   
-  RUNNING=`grep -e "RUNNING" results`
+  RUNNING=`cat results|grep RUNNING|wc -l`
+  
+  NUM_TASKS=`aws ecs list-tasks --cluster $CLUSTER  --service-name $SERVICE --desired-status RUNNING \
+    | jq '.taskArns[]' | wc -l`
 
-  if [ $RUNNING ]; then
+  if [ $RUNNING -eq 2 ] && [ $NUM_TASKS -eq 2 ]; then
     echo "Service updated successfully, new task definition running is running with count tasks = 2.";
     exit 0
   fi
