@@ -92,11 +92,11 @@ if [ ! -f ~/.aws/config ]; then
 
     # Make sure we have all the variables needed: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, CLUSTER, SERVICE, IMAGE
     if [ $AWS_ACCESS_KEY_ID == false ]; then 
-        echo "AWS_ACCESS_KEY_ID is required. You can set it as an environment variable or pass the value using -k or --aws-access-key"
+        echo "AWS_ACCESS_KEY_ID is required. You can set it as an environment variable or configuring a file ~/.aws/config"
         exit 1
     fi
     if [ $AWS_SECRET_ACCESS_KEY == false ]; then 
-        echo "AWS_SECRET_ACCESS_KEY is required. You can set it as an environment variable or pass the value using -s or --aws-secret-key"
+        echo "AWS_SECRET_ACCESS_KEY is required. You can set it as an environment variable or configuring a file ~/.aws/config"
         exit 1
     fi
     
