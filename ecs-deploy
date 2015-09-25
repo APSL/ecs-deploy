@@ -40,6 +40,7 @@ VERBOSE=false
 # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY can be set as environment variables 
 if [ -z ${AWS_ACCESS_KEY_ID+x} ]; then AWS_ACCESS_KEY_ID=false; fi
 if [ -z ${AWS_SECRET_ACCESS_KEY+x} ]; then AWS_SECRET_ACCESS_KEY=false; fi
+if [ -z ${AWS_DEFAULT_REGION+x} ]; then AWS_DEFAULT_REGION='eu-west-1'; fi
 
 # Loop through arguments, two at a time for key and value
 while [[ $# > 0 ]]
