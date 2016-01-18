@@ -137,8 +137,8 @@ imend2=`echo $im | cut -d '/' -f 3`
 if [[ $repo == $imend ]]; then
   sed -i def -e "s/\(\"image\": \"$repo\)\(:[^ ]\+\)*\"/\1:$tag\"/"
 else
-  sed -i def -e "s/\(\"image\": \"$repo\/$imend\/$imend2\)\(:[^ ]\+\)*\"/\1:$tag\"/"
-  sed -i def -e "s/\(\"image\": \"$repo\/$imend\//ghnginx\)\(:[^ ]\+\)*\"/\1:$tag\"/"
+  sed -i def -e "s/\(\"image\": \"$repo\/$imend\/goldcarhelp\)\(:[^ ]\+\)*\"/\1:$tag\"/"
+  sed -i def -e "s/\(\"image\": \"$repo\/$imend\/ghnginx\)\(:[^ ]\+\)*\"/\1:$tag\"/"
 fi
 
 # Filter the def
