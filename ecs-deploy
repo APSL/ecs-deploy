@@ -138,13 +138,14 @@ if [[ $repo == $imend ]]; then
   sed -i def -e "s/\(\"image\": \"$repo\)\(:[^ ]\+\)*\"/\1:$tag\"/"
 else
   sed -i def -e "s/\(\"image\": \"$repo\/$imend\/$imend2\)\(:[^ ]\+\)*\"/\1:$tag\"/"
+  sed -i def -e "s/\(\"image\": \"$repo\/$imend\//ghnginx\)\(:[^ ]\+\)*\"/\1:$tag\"/"
 fi
 
 # Filter the def
 jq < def > newdef '.taskDefinition|{family: .family, volumes: .volumes, containerDefinitions: .containerDefinitions}'
 
 # Register the new task definition, and store its ARN
-NEW_TASKDEF=`aws ecs register-task-definition --cli-input-json file://newdef | jq .taskDefinition.taskDefinitionArn | tr -d '"'`
+NEW_TASKDEF=`aws ecs register-task-definition --family goldcarhelp-$tag --cli-input-json file://newdef | jq .taskDefinition.taskDefinitionArn | tr -d '"'`
 echo "New task definition: $NEW_TASKDEF";
 
 echo "Start update with count tasks = 1..."
