@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+# -/usr/bin/env bash
 
 function usage() {
     set -e
@@ -15,7 +15,7 @@ function usage() {
         -r | --region           AWS Region Name. May also be set as environment variable AWS_DEFAULT_REGION
         -c | --cluster          Name of ECS cluster
         -n | --service-name     Name of service to deploy
-        -i | --image            Name of Docker image to run, ex: mariadb:latest
+        -t | --tag            Name of new tag to run
 
     Optional arguments:
         -t | --timeout          Default is 180s. Script monitors ECS Service for new task definition to be running.
@@ -33,7 +33,7 @@ if [ $# == 0 ]; then usage; fi
 # Setup default values for variables
 CLUSTER=false
 SERVICE=false
-IMAGE=false
+TAG=false
 TIMEOUT=180
 VERBOSE=false
 
@@ -64,8 +64,8 @@ do
             SERVICE="$2"
             shift # past argument
             ;;
-        -i|--image)
-            IMAGE="$2"
+        -t|--tag)
+            TAG="$2"
             shift
             ;;
         -t|--timeout)
@@ -90,7 +90,7 @@ fi
 # If not aws config check if the AWS envs are available
 if [ ! -f ~/.aws/config ]; then
 
-    # Make sure we have all the variables needed: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, CLUSTER, SERVICE, IMAGE
+    # Make sure we have all the variables needed: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, CLUSTER, SERVICE, TAG
     if [ $AWS_ACCESS_KEY_ID == false ]; then 
         echo "AWS_ACCESS_KEY_ID is required. You can set it as an environment variable or configuring a file ~/.aws/config"
         exit 1
@@ -110,8 +110,8 @@ if [ $SERVICE == false ]; then
     echo "SERVICE is required. You can pass the value using -n or --service-name"
     exit 1
 fi
-if [ $IMAGE == false ]; then 
-    echo "IMAGE is required. You can pass the value using -i or --image"
+if [ $TAG == false ]; then 
+    echo "TAG is required. You can pass the value using -t or --tag"
     exit 1
 fi
 
@@ -122,30 +122,17 @@ echo "Current task definition: $TASK_DEFINITION";
 # Get a JSON representation of the current task definition
 aws ecs describe-task-definition --task-def $TASK_DEFINITION > def
 
-# Extract the image from its tag
-if ! [[ $IMAGE =~ ^[^:]+:[^:]+$ ]]; then echo "You must specify an image with a tag" && exit 1; fi
-im=`echo $IMAGE | cut -d':' -f 1`
-tag=`echo $IMAGE | cut -d':' -f 2`
+# get old tag
+OLDTAG=$(cat def |grep '"image":'|head -n 1|cut -d ':' -f 3|cut -d '"' -f 1)
 
-# Extract out the repository from the image, if applicable
-#if ! [[ $im =~ ^[^/]+/[^/]+$|^[^/]+$ ]]; then echo "Your image/repository specification string is invalid" && exit 1; fi
-repo=`echo $im | cut -d '/' -f 1`
-imend=`echo $im | cut -d '/' -f 2`
-imend2=`echo $im | cut -d '/' -f 3`
-
-# Replace the image tag in the old def
-if [[ $repo == $imend ]]; then
-  sed -i def -e "s/\(\"image\": \"$repo\)\(:[^ ]\+\)*\"/\1:$tag\"/"
-else
-  sed -i def -e "s/\(\"image\": \"$repo\/$imend\/goldcarhelp\)\(:[^ ]\+\)*\"/\1:$tag\"/"
-  sed -i def -e "s/\(\"image\": \"$repo\/$imend\/ghnginx\)\(:[^ ]\+\)*\"/\1:$tag\"/"
-fi
+# replace new tag
+sed -i def  -e "s/$OLDTAG/$TAG/"
 
 # Filter the def
 jq < def > newdef '.taskDefinition|{family: .family, volumes: .volumes, containerDefinitions: .containerDefinitions}'
 
 # Register the new task definition, and store its ARN
-NEW_TASKDEF=`aws ecs register-task-definition --family goldcarhelp-$tag --cli-input-json file://newdef | jq .taskDefinition.taskDefinitionArn | tr -d '"'`
+NEW_TASKDEF=`aws ecs register-task-definition --family ${SERVICE}-${TAG} --cli-input-json file://newdef | jq .taskDefinition.taskDefinitionArn | tr -d '"'`
 echo "New task definition: $NEW_TASKDEF";
 
 echo "Start update with count tasks = 1..."
