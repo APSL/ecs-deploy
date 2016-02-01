@@ -34,7 +34,7 @@ if [ $# == 0 ]; then usage; fi
 CLUSTER=false
 SERVICE=false
 TAG=false
-TIMEOUT=180
+TIMEOUT=240
 VERBOSE=false
 
 # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY can be set as environment variables 
@@ -135,52 +135,52 @@ jq < def > newdef '.taskDefinition|{family: .family, volumes: .volumes, containe
 NEW_TASKDEF=`aws ecs register-task-definition --family ${SERVICE}-${TAG} --cli-input-json file://newdef | jq .taskDefinition.taskDefinitionArn | tr -d '"'`
 echo "New task definition: $NEW_TASKDEF";
 
-echo "Start update with count tasks = 1..."
+#echo "Start update with count tasks = 1..."
+## Update the service with the count 1 and wait
+#UPDATE=`aws ecs update-service --desired-count 1 --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASKDEF`
 
-# Update the service with the count 1 and wait
-UPDATE=`aws ecs update-service --desired-count 1 --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASKDEF`
+## See if the service is able to come up again
+#every=10
+#i=0
+#task1=0
+#while [ $i -lt $TIMEOUT ] 
+#do
+#  # Scan the list of running tasks for that service, and see if one of them is the
+#  # new version of the task definition
+#  rm -f tasks
+#  
+#  aws ecs list-tasks --cluster $CLUSTER  --service-name $SERVICE --desired-status RUNNING \
+#    | jq '.taskArns[]' \
+#    | xargs -I{} aws ecs describe-tasks --cluster $CLUSTER --tasks {} >> tasks
+#  
+#  jq < tasks > results ".tasks[]| if .taskDefinitionArn == \"$NEW_TASKDEF\" then . else empty end|.lastStatus"
+#  
+#  RUNNING=`grep -e "RUNNING" results`
+#
+#  NUM_TASKS=`aws ecs list-tasks --cluster $CLUSTER  --service-name $SERVICE --desired-status RUNNING \
+#    | jq '.taskArns[]' | wc -l`
+#  
+#  if [ $RUNNING ] && [ $NUM_TASKS -eq 1 ]; then
+#    echo "Service updated successfully, new task definition is updated. Count tasks = 1.";
+#    task1=1
+#    i=$TIMEOUT
+#  fi
+#  
+#  sleep $every
+#  i=$(( $i + $every ))
+#done
 
-# See if the service is able to come up again
-every=10
-i=0
-task1=0
-while [ $i -lt $TIMEOUT ] 
-do
-  # Scan the list of running tasks for that service, and see if one of them is the
-  # new version of the task definition
-  rm -f tasks
-  
-  aws ecs list-tasks --cluster $CLUSTER  --service-name $SERVICE --desired-status RUNNING \
-    | jq '.taskArns[]' \
-    | xargs -I{} aws ecs describe-tasks --cluster $CLUSTER --tasks {} >> tasks
-  
-  jq < tasks > results ".tasks[]| if .taskDefinitionArn == \"$NEW_TASKDEF\" then . else empty end|.lastStatus"
-  
-  RUNNING=`grep -e "RUNNING" results`
-
-  NUM_TASKS=`aws ecs list-tasks --cluster $CLUSTER  --service-name $SERVICE --desired-status RUNNING \
-    | jq '.taskArns[]' | wc -l`
-  
-  if [ $RUNNING ] && [ $NUM_TASKS -eq 1 ]; then
-    echo "Service updated successfully, new task definition is updated. Count tasks = 1.";
-    task1=1
-    i=$TIMEOUT
-  fi
-  
-  sleep $every
-  i=$(( $i + $every ))
-done
-
-# Timeout
-if [ $task1 -eq 0 ]; then
-    echo "ERROR: New task definition not running within $TIMEOUT seconds (desired-count = 1)"
-    exit 1
-fi
+## Timeout
+#if [ $task1 -eq 0 ]; then
+#    echo "ERROR: New task definition not running within $TIMEOUT seconds (desired-count = 1)"
+#    exit 1
+#fi
 
 echo "Start update with count tasks = 2..."
 
 # Update the service with the count 2 and wait
-UPDATE=`aws ecs update-service --desired-count 2 --cluster $CLUSTER --service $SERVICE`
+UPDATE=`aws ecs update-service --desired-count 2 --cluster $CLUSTER --service $SERVICE --task-definition $NEW_TASKDEF`
+#UPDATE=`aws ecs update-service --desired-count 2 --cluster $CLUSTER --service $SERVICE`
 
 # See if the service is able to come up again
 every=10
