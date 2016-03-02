@@ -15,7 +15,8 @@ function usage() {
         -r | --region           AWS Region Name. May also be set as environment variable AWS_DEFAULT_REGION
         -c | --cluster          Name of ECS cluster
         -n | --service-name     Name of service to deploy
-        -t | --tag            Name of new tag to run
+        -t | --timeout       timeout for ECS operations
+        -r | --revision            Name of new tag to run
 
     Optional arguments:
         -t | --timeout          Default is 180s. Script monitors ECS Service for new task definition to be running.
@@ -64,7 +65,7 @@ do
             SERVICE="$2"
             shift # past argument
             ;;
-        -t|--tag)
+        -r|--revision)
             TAG="$2"
             shift
             ;;
@@ -111,7 +112,7 @@ if [ $SERVICE == false ]; then
     exit 1
 fi
 if [ $TAG == false ]; then 
-    echo "TAG is required. You can pass the value using -t or --tag"
+    echo "Revission is required. You can pass the value using -r or --revision"
     exit 1
 fi
 
